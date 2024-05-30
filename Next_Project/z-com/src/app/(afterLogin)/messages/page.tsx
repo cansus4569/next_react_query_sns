@@ -1,3 +1,3 @@
 export default function Home() {
-  return <main>message Page</main>;
+  return <main>쪽지페이지</main>;
 }

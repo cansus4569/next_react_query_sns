@@ -1,3 +1,3 @@
 export default function Home() {
-  return <main>tweet Page</main>;
+  return <main>게시글</main>;
 }
