@@ -276,3 +276,507 @@ import cx from "classnames";
 
 npm trends 사이트를 통해 현재 사용하고 있는 라이브러리와 비슷한 경쟁 라이브러리를 비교해본 후,
 사용 빈도 수가 많은 것을 선택하는 것이 좋다. (안정성)
+
+## /compose/tweet 만들기
+
+- 어떤 페이지에서든 게시하기를 누르면 뒤 배경은 유지한 채로 모달이 떠야 하기 때문에 인터셉팅 라우트를 사용한다.
+  - `/home`으로 접속하면 `/(afterLogin)/layout.tsx`의 children인 `/(afterLogin)/home/page.tsx`가 화면에 표시되고,  
+    동시에 modal인 `/(afterLogin)/@modal/default.tsx`도 페러렐 라우팅 된다.
+  - 이 때, `/(afterLogin)/@modal/(.)compose/tweet`와 같이 인터셉팅 라우트를 사용하면  
+    `/home`이 아닌 `/explore`나 `/message`에서 모달을 띄우더라도 `/(afterLogin)/layout.tsx`의 children만 바뀌는 것이기 때문에 뒤의 배경은 유지된다.  
+    `/compose/tweet`은 modal에게 인터셉트 당하여 화면에 표시되지 않고, 새로고침을 했을 때만 화면에 표시된다.
+
+## usePathname과 /explore 페이지
+
+### /explore 분석하기
+
+/explore 페이지에는 레이아웃에 있던 나를 위한 트렌드, 검색 부분이 우측 섹션에서 가운데 섹션으로 이동된다.
+
+`useSelectedLayoutSegment()` 훅을 사용해서 주소에 맞는 렌더링을 해주어도 되지만,
+`usePathname()` 훅을 사용하는 방법도 존재한다.
+
+#### usePathname()
+
+현재 URL의 pathname 문자열을 반환한다.
+
+| URL          | 반환된 값    |
+| ------------ | ------------ |
+| /            | /            |
+| /explore     | /explore     |
+| /explore?v=2 | /explore     |
+| /explore/123 | /explore/123 |
+
+나를 위한 트렌드(TrendSection) 컴포넌트에 `usePathname()` 훅을 사용해서 조건부 렌더링을 적용한다.
+
+```tsx
+// app/(afterLogin)/_component/TrendSection.tsx
+import style from './trendSection.module.css';
+import Trend from './Trend';
+import { usePathname } from 'next/navigation';
+
+export default function TrendSection() {
+  const pathname = usePathname();
+
+  if (pathname === '/explore') return null;
+
+  return (
+    <div className={style.trendBg}>
+      <div className={style.trend}>
+        <h3>나를 위한 트렌드</h3>
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+        <Trend />
+      </div>
+    </div>
+  );
+}
+```
+
+## useSearchParams와 프로필, /search 페이지
+
+### Tab 컴포넌트
+
+홈에서 사용되는 Tab 컴포넌트와 탐색하기 페이지에서 사용되는 Tab 컴포넌트는 역할이 다르다.
+홈에는 Tab을 활성화하면 주소창에 변화가 없지만, 탐색하기 페이지의 Tab은 활성화 될 때마다 주소창에 변화가 생기기 때문에
+이럴 때에는 각각의 컴포넌트로 만들어주는 것이 좋다.
+
+#### Tab 활성화 될 때 주소 변경하기
+
+- useRouter()의 replace()와 useSearchParams() 활용하기
+
+```tsx
+const router = useRouter();
+const searchParams = useSearchParams();
+
+const onClickHot = () => {
+  setCurrent('hot');
+  router.replace(`/search?q=${searchParams.get('q')}`);
+};
+```
+
+#### useRouter()
+
+router 객체에 접근할 수 있는 훅
+**replace()**
+router.push()와 동일하게 동작하지만, 히스토리 스택에 URL을 추가하지 않고 변경시킨다.
+즉 현재 페이지의 url을 완전히 바꿔주는 것이기 떄문에 뒤로가기를 했을 시 push()와의 차이점이 발생한다.
+
+`push`
+`홈` > `로그인` > `리다이렉트 페이지` > [뒤로가기] > `로그인`
+`replace`
+`홈` > `로그인` > `리다이렉트 페이지` > [뒤로가기] > `홈`
+
+#### useSearchParams()
+
+클라이언트 컴포넌트에서 쿼리 스트링 문자열을 읽을 수 있다.
+
+## 이벤트 캡처링과 /status/[id] 페이지
+
+### Post 컴포넌트 분석
+
+Post 컴포넌트를 클릭했을 때, status 페이지로 이동되어야 한다. 단, Link와 같이 a 태그가 사용되는 것이 아닌 클라이언트에서 동작을 추가해야 한다.
+
+#### Link와 useRouter의 차이
+
+```
+Link의 경우 hover 동작을 했을 때 브라우저 좌측 하단에 이동할 주소가 보여지고,
+useRouter를 사용하여 onClick 동작으로 이동될 경우 좌측 하단에 이동할 주소가 보여지지 않는다.
+```
+
+하나의 동작을 위해 서버 컴포넌트를 클라이언트 컴포넌트로 변경해야 할 경우,
+과감하게 해당 컴포넌트를 분리하여 **children**이나 **props**로 넘겨서 작은 클라이언트 컴포넌트로 세분화하자.
+
+### onClickCapture()
+
+![image](https://github.com/cansus4569/next_react_query_sns/assets/63139527/5517d3fe-c9c8-4915-ac86-5e9c092f0e7a)
+
+```tsx
+// src/app/(afterLogin)/_component/Post.tsx
+// ...
+
+export default function Post() {
+  // ...
+
+  return (
+    <PostArticle post={target}>
+      <div className={style.postWrapper}>
+        <div className={style.postUserSection}>
+          <Link href={`/${target.User.id}`} className={style.postUserImage}>
+            <img src={target.User.image} alt={target.User.nickname} />
+            <div className={style.postShade} />
+          </Link>
+        </div>
+        <div className={style.postBody}>
+          <div className={style.postMeta}>
+            <Link href={`/${target.User.id}`}>
+              <span className={style.postUserName}>{target.User.nickname}</span>
+              &nbsp;
+              <span className={style.postUserId}>@{target.User.id}</span>
+              &nbsp; · &nbsp;
+            </Link>
+            <span className={style.postDate}>
+              {dayjs(target.createdAt).fromNow(true)}
+            </span>
+          </div>
+          <div>{target.content}</div>
+          <div className={style.postImageSection}></div>
+          <ActionButtons />
+        </div>
+      </div>
+    </PostArticle>
+  );
+}
+```
+
+Post 컴포넌트에서의 클릭 이벤트는 PostArticle과 그 자식 Link들이 있다.
+이때 PostArticle 내의 자식 요소인 Link를 클릭했을 때에도 PostArticle 클릭 이벤트가 동작되는 현상이 발생한다.
+이러한 현상을 **_이벤트 캡처링_** 이라 하며 이때는 **_onClick 핸들러 외에 onClickCapture 핸들러를 사용_**하여 캡처링 단게에서
+PostArticle의 클릭 이벤트가 동작하도록 변경해서 이러한 현상을 해결할 수 있다.
+
+```tsx
+export default function PostArticle({ children, post }: Props) {
+  const router = useRouter();
+
+  const onClick = () => {
+    router.push(`/${post.User.id}/status/${post.postId}`);
+  };
+
+  return (
+    <article onClickCapture={onClick} className={style.post}>
+      {children}
+    </article>
+  );
+}
+```
+
+## faker.js와 /photo/[photoId]
+
+### faker.js
+
+더미데이터를 만들어주는 라이브러리
+
+```sh
+$ npm i @faker-js/faker
+```
+
+faker의 기존 라이브러리 제작자가 6버전부터 망쳐놓았기 때문에 아래의 라이브러리는 설치하지 말자
+https://www.npmjs.com/package/faker
+
+#### 사용 코드
+
+```tsx
+export default function Post() {
+  const target = {
+    postId: 1,
+    User: {
+      id: "elonmusk",
+      nickname: "Elon Musk",
+      image: "/yRsRRjGO.jpg",
+    },
+    content: "클론코딩 라이브로 하니 너무 힘들어요 ㅠㅠ",
+    createdAt: new Date(),
+    Images: [] as any[],
+  };
+
+  // 반반 확률로 임시 이미지를 넣어준다.
+  if (Math.random() > 0.5) {
+    target.Images.push({ imageId: 1, link: faker.image.urlLoremFlickr() });
+  }
+
+return (
+    <PostArticle post={target}>
+      <div className={style.postWrapper}>
+        <div className={style.postUserSection}>
+				// ...
+				</div>
+          <div>{target.content}</div>
+          <div className={style.postImageSection}>
+            {target.Images && target.Images.length > 0 && (
+							<Link
+							  href={`/${target.User.id}/status/${target.postId}/photo/${target.Images[0].imageId}`}
+							  className={style.postImageSection}
+							>
+							  <img src={target.Images[0]?.link} alt="" />
+							</Link>
+            )}
+          </div>
+          <ActionButtons />
+        </div>
+      </div>
+    </PostArticle>
+  );
+}
+```
+
+### 이미지 상세보기
+
+이미지를 클릭했을 때, 이미지 모달이 뜨기 때문에 해당 주소 페이지를 만들어주어야 한다.
+
+#### 폴더 생성
+
+![image](https://github.com/cansus4569/next_react_query_sns/assets/63139527/05195762-a1f2-4372-91e4-704cf9f41711)
+
+#### 페이지 만들기
+
+이미지 모달 형태이기 때문에 패러릴 라우트와 인터셉팅 라우팅이 필요하다.
+따라서 뒤의 배경 페이지는 홈과 동일하기 때문에 홈 컴포넌트를 사용해준다.
+
+```tsx
+// src/app/(afterLogin)/[username]/status/[id]/photo/[photoId]/page.tsx
+import Home from '@/app/(afterLogin)/home/page';
+
+type Props = {
+  params: { username: string; id: string; photoId: string };
+};
+export default function Page({ params }: Props) {
+  params.username; // elonmusk
+  params.id; // 1
+  params.photoId; // 1
+
+  return <Home />;
+}
+```
+
+slug 부분 ( `[folder]` )들을 컴포넌트의 params로 받아볼 수 있다.
+
+```tsx
+export default function Page({ params }: Props) {
+  params.username; // elonmusk
+  params.id; // 1
+  params.photoId; // 1
+
+  return <Home />;
+}
+```
+
+#### 모달 만들기
+
+모달 폴더에 해당 주소와 같은 경로로 폴더를 생성한다.
+![image](https://github.com/cansus4569/next_react_query_sns/assets/63139527/37e1d33c-029a-42f2-b84c-47fb5a3fd241)
+
+##### 기존에 페이지가 존재하는 곳마다 default 페이지를 추가해주어야 한다.
+
+아래에서는 `[username]/default.tsx`, `[username]/status/[id]/default.tsx`를 추가해주었다.
+![image](https://github.com/cansus4569/next_react_query_sns/assets/63139527/a9264481-dec2-43d0-98c0-be134f3d65ad)
+
+```tsx
+// src\app\(afterLogin)\@modal\[username]\status\[id]\photo\[photoId]\page.tsx
+import Post from '@/app/(afterLogin)/_component/Post';
+import CommentForm from '@/app/(afterLogin)/[username]/status/[id]/_component/CommentForm';
+import ActionButtons from '@/app/(afterLogin)/_component/ActionButtons';
+import style from './photoModal.module.css';
+import PhotoModalCloseButton from '@/app/(afterLogin)/@modal/[username]/status/[id]/photo/[photoId]/_component/PhotoModalCloseButton';
+import { faker } from '@faker-js/faker';
+
+export default function Default() {
+  const photo = {
+    imageId: 1,
+    link: faker.image.urlLoremFlickr(),
+    Post: {
+      content: faker.lorem.text(),
+    },
+  };
+
+  return (
+    <div className={style.container}>
+      <PhotoModalCloseButton />
+      <div className={style.imageZone}>
+        <img src={photo.link} alt={photo.Post?.content} />
+        <div
+          className={style.image}
+          style={{ backgroundImage: `url(${photo.link})` }}
+        />
+        <div className={style.buttonZone}>
+          <div className={style.buttonInner}>
+            <ActionButtons white />
+          </div>
+        </div>
+      </div>
+      <div className={style.commentZone}>
+        <Post noImage />
+        <CommentForm />
+        <Post />
+        <Post />
+        <Post />
+        <Post />
+        <Post />
+        <Post />
+        <Post />
+      </div>
+    </div>
+  );
+}
+```
+
+## /messages 페이지 라이브 클론
+
+### Tip. 객체의 키 값이 대문자인 경우
+
+서버에서 보내주는 데이터 형태가 이러할 거다 예상하고 작성한 것이다.
+유저 정보와 메시지 정보를 join해서 DB를 구성한 컬럼은 대무낮로 오기 때문에
+아래와 같은 형태를 뛴다.
+
+```tsx
+export default function Room() {
+  const router = useRouter();
+  const user = {
+    id: "thor",
+    nickname: "토르",
+    Messages: [
+      { roomId: 123, content: "안녕하세요.", createdAt: new Date() },
+      { roomId: 123, content: "안녕히가세요.", createdAt: new Date() },
+    ],
+  };
+```
+
+### dayjs 플러그인은 페이지 별로 설정해주어야 한다.
+
+```tsx
+import 'dayjs/locale/ko';
+
+dayjs.locale('ko');
+dayjs.extend(relativeTime);
+```
+
+## 다중 이미지 구역 만들기 (=> 리팩토링 할 순 없을까?) + 이미지 상세보기 캐러셀 구현(키보드로만 이동 가능, 강의 예정)
+
+### PostImages 컴포넌트
+
+이미지 업로드가 4개까지로 제한되어 있기 때문에 배열 길이에 따라 코딩해준다.
+
+```tsx
+// src\app\(afterLogin)\_component\PostImages.tsx
+import Link from 'next/link';
+import style from '@/app/(afterLogin)/_component/post.module.css';
+import cx from 'classnames';
+
+type Props = {
+  post: {
+    postId: number;
+    content: string;
+    User: {
+      id: string;
+      nickname: string;
+      image: string;
+    };
+    createdAt: Date;
+    Images: any[];
+  };
+};
+
+export default function PostImages({ post }: Props) {
+  if (!post.Images) return null;
+  if (!post.Images.length) return null;
+  if (post.Images.length === 1) {
+    return (
+      <Link
+        href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[0].imageId}`}
+        className={cx(style.postImageSection, style.oneImage)}
+        style={{
+          backgroundImage: `url(${post.Images[0]?.link})`,
+          backgroundSize: 'contain',
+        }}
+      >
+        <img src={post.Images[0]?.link} alt="" />
+      </Link>
+    );
+  }
+  if (post.Images.length === 2) {
+    return (
+      <div className={cx(style.postImageSection, style.twoImage)}>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[0].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[0]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[1].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[1]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+      </div>
+    );
+  }
+  if (post.Images.length === 3) {
+    return (
+      <div className={cx(style.postImageSection, style.threeImage)}>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[0].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[0]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+        <div>
+          <Link
+            href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[1].imageId}`}
+            style={{
+              backgroundImage: `url(${post.Images[1]?.link})`,
+              backgroundSize: 'cover',
+            }}
+          ></Link>
+          <Link
+            href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[2].imageId}`}
+            style={{
+              backgroundImage: `url(${post.Images[2]?.link})`,
+              backgroundSize: 'cover',
+            }}
+          ></Link>
+        </div>
+      </div>
+    );
+  }
+  if (post.Images.length === 4) {
+    return (
+      <div className={cx(style.postImageSection, style.fourImage)}>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[0].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[0]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[1].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[1]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[2].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[2]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+        <Link
+          href={`/${post.User.id}/status/${post.postId}/photo/${post.Images[3].imageId}`}
+          style={{
+            backgroundImage: `url(${post.Images[3]?.link})`,
+            backgroundSize: 'cover',
+          }}
+        ></Link>
+      </div>
+    );
+  }
+  return null;
+}
+```
+
+## 반응형 만들기
+
+```
+미디어 쿼리의 기준 px 등은 변수로 만들어 두는 것이 좋다.
+```
