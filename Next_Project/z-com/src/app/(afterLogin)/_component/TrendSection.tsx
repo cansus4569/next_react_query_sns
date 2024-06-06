@@ -1,8 +1,12 @@
-import React from 'react';
+'use client';
+
 import style from './trendSection.module.css';
 import Trend from '@/app/(afterLogin)/_component/Trend';
+import { usePathname } from 'next/navigation';
 
-const TrendSection = () => {
+export default function TrendSection() {
+  const pathname = usePathname();
+  if (pathname === '/explore') return null;
   return (
     <div className={style.trendBg}>
       <div className={style.trend}>
@@ -20,6 +24,4 @@ const TrendSection = () => {
       </div>
     </div>
   );
-};
-
-export default TrendSection;
+}
